@@ -50,6 +50,16 @@ ser.setDTR(False); ser.setRTS(True); time.sleep(0.1); ser.setRTS(False)  # reset
 
 `compile_commands.json` (needed by clangd for header resolution) is only generated after a build — the IDE will show false "file not found" errors for ESP-IDF headers until `idf.py build` has run at least once.
 
+## Scopo del progetto e convenzioni di codice
+
+Questo è un progetto didattico: l'obiettivo primario è che l'utente impari ad usare ESP-IDF, non solo ottenere firmware funzionante. Questo cambia il modo in cui il codice va scritto e presentato:
+
+- **Separare implementazione da interfaccia**: ogni modulo funzionale (display, touch, RTC, IMU, buzzer, ecc.) deve esporre un header (`.h`) con l'interfaccia pubblica (funzioni, tipi, costanti) tenuto distinto dal `.c` che contiene l'implementazione. Evitare di ammassare tutto in `main.c` man mano che il progetto cresce — quando una funzionalità diventa sostanziosa, va estratta in un component sotto `components/` (vedi sezione Architecture) o quantomeno in coppie `.h`/`.c` separate dentro `main/`.
+- **Commenti prolissi**: a differenza delle convenzioni generiche di terseness, in questo progetto i commenti devono spiegare per esteso *cosa fa* il codice e *perché*, non solo il non-ovvio. Il codice è materiale didattico: privilegiare la chiarezza per chi sta imparando rispetto alla concisione.
+- **Spiegazione ad ogni aggiunta**: quando si aggiunge codice, spiegare all'utente la funzione del codice stesso nella risposta (non solo nei commenti) — a cosa serve, come si inserisce nell'architettura del progetto, eventuali scelte alternative scartate.
+- **Leggibilità prima di tutto**: a parità di risultato, preferire sempre la soluzione più semplice e leggibile rispetto a quella più compatta, furba o performante. Evitare micro-ottimizzazioni premature, macro/trick oscuri, o astrazioni che non aiutano la comprensione: in un progetto didattico un codice che si legge facilmente vale più di uno scritto in poche righe.
+- Mantenere comunque le best practice standard di programmazione C/ESP-IDF (gestione errori con `ESP_ERROR_CHECK`/codici di ritorno, naming coerente, uso di `menuconfig`/Kconfig dove sensato, ecc.).
+
 ## Architecture
 
 Single-component project: all application code lives in `main/main.c`, registered via `main/CMakeLists.txt` (`idf_component_register`). There are no custom components yet — new functionality should either grow `main` or be split into a component under a top-level `components/` directory following standard ESP-IDF component structure if it becomes substantial (e.g. a dedicated display/touch driver component).
