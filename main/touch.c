@@ -1,22 +1,20 @@
 #include "touch.h"
 
 #include "driver/gpio.h"
-#include "driver/i2c_master.h"
 #include "esp_lcd_io_i2c.h"
 #include "esp_lcd_touch.h"
 #include "esp_lcd_touch_cst816s.h"
 #include "esp_log.h"
 #include "display.h"
+#include "i2c_bus.h"
 
 static const char *TAG = "touch";
 
-/* Pin della board (vedi tabella in CLAUDE.md / docs/datasheet/ESP32-S3-Touch-LCD-1.69-Pinout.webp).
- * SCL/SDA sono lo stesso bus I2C che in futuro ospitera' anche RTC e IMU. */
-#define PIN_I2C_SCL   10
-#define PIN_I2C_SDA   11
+/* Pin di reset del touch (vedi tabella in CLAUDE.md /
+ * docs/datasheet/ESP32-S3-Touch-LCD-1.69-Pinout.webp). SCL/SDA non sono
+ * piu' gestiti qui: il bus I2C, condiviso anche con RTC e IMU, e' di
+ * competenza del modulo i2c_bus (vedi i2c_bus_get_handle()). */
 #define PIN_TOUCH_RST 13
-
-#define I2C_PORT_NUM I2C_NUM_0
 
 /* Handle del driver touch, salvato staticamente dentro il modulo: chi usa
  * touch_get_point() non ha bisogno di conoscere ne' passare questo handle,
@@ -25,20 +23,10 @@ static esp_lcd_touch_handle_t s_touch_handle = NULL;
 
 void touch_init(void) {
     /* --- 1. Bus I2C ---
-     * Usiamo il driver "nuovo" di ESP-IDF 5.x (driver/i2c_master.h): il bus
-     * si crea una sola volta con i2c_new_master_bus() e resta disponibile
-     * per aggiungere altri device (in futuro RTC e IMU) con i loro
-     * indirizzi, senza dover reinizializzare i pin SCL/SDA. */
-    i2c_master_bus_config_t bus_config = {
-        .i2c_port = I2C_PORT_NUM,
-        .sda_io_num = PIN_I2C_SDA,
-        .scl_io_num = PIN_I2C_SCL,
-        .clk_source = I2C_CLK_SRC_DEFAULT,
-        .glitch_ignore_cnt = 7,
-        .flags.enable_internal_pullup = true,
-    };
-    i2c_master_bus_handle_t bus_handle = NULL;
-    ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &bus_handle));
+     * Il bus e' condiviso con RTC e IMU: lo richiediamo al modulo i2c_bus,
+     * che lo crea al primo utilizzo (qui, se touch_init() e' il primo
+     * modulo driver inizializzato) o restituisce quello gia' esistente. */
+    i2c_master_bus_handle_t bus_handle = i2c_bus_get_handle();
 
     /* --- 2. Panel IO: incapsula il bus I2C con l'indirizzo del controller
      * touch (0x15) e i dettagli del protocollo di trasferimento, seguendo
@@ -65,8 +53,7 @@ void touch_init(void) {
     };
     ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_cst816s(io_handle, &touch_config, &s_touch_handle));
 
-    ESP_LOGI(TAG, "Touch CST816T inizializzato (I2C SCL=%d SDA=%d, reset GPIO%d)", PIN_I2C_SCL, PIN_I2C_SDA,
-             PIN_TOUCH_RST);
+    ESP_LOGI(TAG, "Touch CST816T inizializzato (reset GPIO%d)", PIN_TOUCH_RST);
 }
 
 bool touch_get_point(uint16_t *x, uint16_t *y) {
