@@ -15,5 +15,11 @@
     "--query-driver=**",
     "--compile-commands-dir=/home/gian/workingOn/TEST E STUDIO/esp_idf_orologio/build"
   ],
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "[c]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+  },
+  "[cpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+  }
 }

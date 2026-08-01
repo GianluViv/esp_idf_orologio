@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-ESP-IDF firmware project (`esp_idf_orologio`) for the **Waveshare ESP32-S3-Touch-LCD-1.69** board: ESP32-S3R8 (dual-core, 8MB PSRAM), 16MB flash, 1.69" round touch LCD (ST7789V2 driver, 240×280), CST816T capacitive touch, QMI8658 6-axis IMU, PCF85063A RTC, Li-battery charging. Datasheets, schematic and pinout diagram for the board are in [docs/](docs/).
+ESP-IDF firmware project (`esp_idf_orologio`) for the **Waveshare ESP32-S3-Touch-LCD-1.69** board: ESP32-S3R8 (dual-core, 8MB PSRAM), 16MB flash, 1.69" round touch LCD (ST7789V2 driver, 240×280), CST816T capacitive touch, QMI8658 6-axis IMU, PCF85063A RTC, Li-battery charging. Datasheets, schematic and pinout diagram for the board are in [docs/datasheet/](docs/datasheet/).
 
-### Key pin assignments (see `docs/ESP32-S3-Touch-LCD-1.69-Pinout.webp` for the full diagram)
+### Key pin assignments (see `docs/datasheet/ESP32-S3-Touch-LCD-1.69-Pinout.webp` for the full diagram)
 
 | Function | GPIO |
 |---|---|
@@ -62,11 +62,22 @@ Questo è un progetto didattico: l'obiettivo primario è che l'utente impari ad 
 
 ## Architecture
 
-Single-component project: all application code lives in `main/main.c`, registered via `main/CMakeLists.txt` (`idf_component_register`). There are no custom components yet — new functionality should either grow `main` or be split into a component under a top-level `components/` directory following standard ESP-IDF component structure if it becomes substantial (e.g. a dedicated display/touch driver component).
+Single-component project: all application code lives under `main/`, registered via `main/CMakeLists.txt` (`idf_component_register`). There are no custom components yet — new functionality should either grow `main` (as separate `.h`/`.c` pairs, see below) or be split into a component under a top-level `components/` directory following standard ESP-IDF component structure if it becomes substantial.
+
+`main/` currently contains, one `.h`/`.c` pair per module:
+
+- `main.c` — orchestration only: calls the init functions below in order and creates the application-level LVGL widgets.
+- `diagnostics.h/.c` — boot-time chip/heap/PSRAM info logging.
+- `display.h/.c` — SPI bus + ST7789V2 panel driver (via ESP-IDF's built-in `esp_lcd` component, no external dependency needed), backlight control. Knows nothing about LVGL.
+- `lvgl_port.h/.c` — the LVGL↔hardware bridge: `lv_init`, PSRAM-backed draw buffers, flush/tick/indev-read callbacks, the dedicated FreeRTOS task that drives `lv_timer_handler()`, and the `lvgl_port_lock()`/`lvgl_port_unlock()` mutex any other task must use before touching `lv_*` APIs.
+- `touch.h/.c` — I2C bus (shared, in the future, with RTC/IMU) + CST816T touch driver (`espressif/esp_lcd_touch_cst816s` from the Component Registry — built for the register-compatible CST816S but works fine on this board's CST816T), exposed as a simple `touch_get_point()` polled from `lvgl_port`'s indev callback.
+
+LVGL (v9, via the ESP-IDF Component Manager, see `main/idf_component.yml`) drives the whole display/touch UI; see [docs/lvgl-architettura.md](docs/lvgl-architettura.md) for the full architecture (layering, buffering, concurrency) and [docs/piano-lvgl-touch.md](docs/piano-lvgl-touch.md) for the implementation history, including two non-obvious bugs found and fixed along the way (pixel byte-endianness on the SPI panel, and LVGL 9's self-pausing refresh timer).
 
 A devcontainer (`.devcontainer/`) based on `espressif/idf` is available for QEMU-based builds without physical hardware, but the primary workflow in this repo is building and flashing to the real board over `/dev/ttyACM0`.
 
 ## Notes
 
 - `sdkconfig` flash size must stay `CONFIG_ESPTOOLPY_FLASHSIZE_16MB` — the board has 16MB flash; a mismatched 2MB default causes a bootloader size-mismatch warning and wastes usable flash.
-- The official Waveshare ESP-IDF example package (ST7789 driver, ST7789+LVGL, PCF85063, QMI8658 demos) is downloadable from `https://files.waveshare.com/wiki/ESP32-S3-Touch-LCD-1.69/ESP32-S3-Touch-LCD-1.69_Demo.zip` — useful as a reference when implementing display/touch/RTC/IMU support, but its examples are pinned to the ESP32-S3-Zero pinout and need adapting to the pin table above.
+- `sdkconfig` PSRAM must stay enabled (`CONFIG_SPIRAM=y`, Octal mode, 80MHz) — required for the LVGL draw buffers. **Note:** `sdkconfig` is gitignored in this repo (see `.gitignore`), so this setting is local-only and won't survive a fresh clone; if you ever regenerate `sdkconfig` from scratch, re-enable PSRAM before building the display/LVGL code (`idf.py menuconfig` → `Component config → ESP PSRAM`, Octal mode, 8MB ESP32-S3R8).
+- The official Waveshare ESP-IDF example package (ST7789 driver, ST7789+LVGL, PCF85063, QMI8658 demos) is downloadable from `https://files.waveshare.com/wiki/ESP32-S3-Touch-LCD-1.69/ESP32-S3-Touch-LCD-1.69_Demo.zip` — useful as a reference when implementing RTC/IMU support (display/touch are already implemented in this repo), but its examples are pinned to the ESP32-S3-Zero pinout and need adapting to the pin table above.
