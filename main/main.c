@@ -12,9 +12,7 @@ void app_main(void) {
     diagnostics_print_chip_info();
 
     // Inizializza LVGL (che a sua volta inizializza il display) e avvia il
-    // task dedicato al rendering: da qui in poi lo schermo e' gestito
-    // interamente da LVGL, non si chiamano piu' funzioni esp_lcd_panel_*
-    // direttamente dal codice applicativo.
+    // task dedicato al rendering.
     lvgl_port_init();
 
     diagnostics_create_test_button();
